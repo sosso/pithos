@@ -90,7 +90,12 @@ def load_plugins(window):
         else:
             plugin = plugins[name]
 
-        if plugin.preference and prefs.get(plugin.preference, False):
+        try:
+            enabled = prefs.getboolean(plugin.preference)
+        except ValueError:
+            enabled = (prefs[plugin.preference] != '')
+
+        if plugin.preference and enabled:
             plugin.enable()
         else:
             plugin.disable()

@@ -18,6 +18,7 @@ import sys
 import os
 import stat
 import logging
+import configparser
 
 from gi.repository import Gtk
 from gi.repository import GObject
@@ -63,6 +64,8 @@ class PreferencesPithosDialog(Gtk.Dialog):
         self.builder = builder
         self.builder.connect_signals(self)
 
+        self.config = configparser.ConfigParser()
+
         # initialize the "Audio Quality" combobox backing list
         audio_quality_combo = self.builder.get_object('prefs_audio_quality')
         fmt_store = Gtk.ListStore(GObject.TYPE_STRING, GObject.TYPE_STRING)
@@ -84,46 +87,39 @@ class PreferencesPithosDialog(Gtk.Dialog):
 
     def __load_preferences(self):
         #default preferences that will be overwritten if some are saved
-        self.__preferences = {
-            "username":'',
-            "password":'',
+        self.config['DEFAULT'] = {
+            "username": '',
+            "password": '',
             "notify":True,
-            "last_station_id":None,
-            "proxy":'',
-            "control_proxy":'',
-            "control_proxy_pac":'',
+            "last_station_id": '',
+            "proxy": '',
+            "control_proxy": '',
+            "control_proxy_pac": '',
             "show_icon": False,
-            "lastfm_key": False,
-            "enable_mediakeys":True,
-            "enable_screensaverpause":False,
+            "lastfm_key": '',
+            "enable_mediakeys": True,
+            "enable_screensaverpause": False,
             "volume": 1.0,
             # If set, allow insecure permissions. Implements CVE-2011-1500
             "unsafe_permissions": False,
             "audio_quality": default_audio_quality,
             "pandora_one": False,
-            "force_client": None,
+            "force_client": '',
         }
 
         try:
-            f = open(configfilename)
-        except IOError:
-            f = []
+            self.config.read(configfilename)
+        except configparser.MissingSectionHeaderError:
+            print('err')
 
-        for line in f:
-            sep = line.find('=')
-            key = line[:sep]
-            val = line[sep+1:].strip()
-            if val == 'None': val=None
-            elif val == 'False': val=False
-            elif val == 'True': val=True
-            self.__preferences[key]=val
-
-        if 'audio_format' in self.__preferences:
+        if 'audio_format' in self.config['Pithos']:
             # Pithos <= 0.3.17, replaced by audio_quality
-            del self.__preferences['audio_format']
+            del self.config['Pithos']['audio_format']
 
-        if not pacparser_imported and self.__preferences['control_proxy_pac'] != '':
-            self.__preferences['control_proxy_pac'] = ''
+        if not pacparser_imported and self.config['Pithos']['control_proxy_pac'] != '':
+            self.config['Pithos']['control_proxy_pac'] = ''
+
+        self.__preferences = self.config['Pithos']
 
         self.setup_fields()
 
@@ -174,20 +170,17 @@ class PreferencesPithosDialog(Gtk.Dialog):
 
     def save(self):
         existed = os.path.exists(configfilename)
-        f = open(configfilename, 'w')
+        with open(configfilename, 'w') as config_file:
+            if not existed:
+                # make the file owner-readable and writable only
+                os.fchmod(config_file.fileno(), (stat.S_IRUSR | stat.S_IWUSR))
 
-        if not existed:
-            # make the file owner-readable and writable only
-            os.fchmod(f.fileno(), (stat.S_IRUSR | stat.S_IWUSR))
-
-        for key in self.__preferences:
-            f.write('%s=%s\n'%(key, self.__preferences[key]))
-        f.close()
+            self.config.write(config_file)
 
     def setup_fields(self):
         self.builder.get_object('prefs_username').set_text(self.__preferences["username"])
         self.builder.get_object('prefs_password').set_text(self.__preferences["password"])
-        self.builder.get_object('checkbutton_pandora_one').set_active(self.__preferences["pandora_one"])
+        self.builder.get_object('checkbutton_pandora_one').set_active(self.__preferences.getboolean("pandora_one"))
         self.builder.get_object('prefs_proxy').set_text(self.__preferences["proxy"])
         self.builder.get_object('prefs_control_proxy').set_text(self.__preferences["control_proxy"])
         self.builder.get_object('prefs_control_proxy_pac').set_text(self.__preferences["control_proxy_pac"])
@@ -201,9 +194,9 @@ class PreferencesPithosDialog(Gtk.Dialog):
                 audio_quality_combo.set_active_iter(row.iter)
                 break
 
-        self.builder.get_object('checkbutton_notify').set_active(self.__preferences["notify"])
-        self.builder.get_object('checkbutton_screensaverpause').set_active(self.__preferences["enable_screensaverpause"])
-        self.builder.get_object('checkbutton_icon').set_active(self.__preferences["show_icon"])
+        self.builder.get_object('checkbutton_notify').set_active(self.__preferences.getboolean("notify"))
+        self.builder.get_object('checkbutton_screensaverpause').set_active(self.__preferences.getboolean("enable_screensaverpause"))
+        self.builder.get_object('checkbutton_icon').set_active(self.__preferences.getboolean("show_icon"))
 
         self.lastfm_auth = LastFmAuth(self.__preferences, "lastfm_key", self.builder.get_object('lastfm_btn'))
 
@@ -214,13 +207,13 @@ class PreferencesPithosDialog(Gtk.Dialog):
 
         self.__preferences["username"] = self.builder.get_object('prefs_username').get_text()
         self.__preferences["password"] = self.builder.get_object('prefs_password').get_text()
-        self.__preferences["pandora_one"] = self.builder.get_object('checkbutton_pandora_one').get_active()
+        self.__preferences["pandora_one"] = str(self.builder.get_object('checkbutton_pandora_one').get_active())
         self.__preferences["proxy"] = self.builder.get_object('prefs_proxy').get_text()
         self.__preferences["control_proxy"] = self.builder.get_object('prefs_control_proxy').get_text()
         self.__preferences["control_proxy_pac"] = self.builder.get_object('prefs_control_proxy_pac').get_text()
-        self.__preferences["notify"] = self.builder.get_object('checkbutton_notify').get_active()
-        self.__preferences["enable_screensaverpause"] = self.builder.get_object('checkbutton_screensaverpause').get_active()
-        self.__preferences["show_icon"] = self.builder.get_object('checkbutton_icon').get_active()
+        self.__preferences["notify"] = str(self.builder.get_object('checkbutton_notify').get_active())
+        self.__preferences["enable_screensaverpause"] = str(self.builder.get_object('checkbutton_screensaverpause').get_active())
+        self.__preferences["show_icon"] = str(self.builder.get_object('checkbutton_icon').get_active())
 
         audio_quality = self.builder.get_object('prefs_audio_quality')
         active_idx = audio_quality.get_active()
