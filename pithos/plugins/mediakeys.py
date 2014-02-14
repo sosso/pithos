@@ -20,7 +20,7 @@ import logging
 
 APP_ID = 'Pithos'
 
-class MediaKeyPlugin(PithosPlugin):
+class KeyboardShortcutPlugin(PithosPlugin):
     preference = 'enable_mediakeys'
     
     def bind_dbus(self):
@@ -40,15 +40,15 @@ class MediaKeyPlugin(PithosPlugin):
             return False
             
     def mediakey_pressed(self, app, action):
-       if app == APP_ID:
+        if app == APP_ID:
             if action == 'Play':
                 self.window.playpause_notify()
             elif action == 'Next':
-                self.window.next_song()
+                self.window.ban_song()
             elif action == 'Stop':
-                self.window.user_pause()
+                self.window.tired_song()
             elif action == 'Previous':
-                self.window.bring_to_top()
+                self.window.love_song()
             
     def bind_keybinder(self):
         try:
